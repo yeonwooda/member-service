@@ -94,7 +94,7 @@ public class TokenService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication); // 로그인 처리
 
-        return null;
+        return authentication;
     }
 
     public Authentication authentication(HttpServletRequest request) {
