@@ -1,14 +1,14 @@
 package org.koreait.member.jwt;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import org.koreait.global.exceptions.UnAuthorizedException;
+import org.koreait.global.libs.Utils;
 import org.koreait.member.MemberInfo;
 import org.koreait.member.services.MemberInfoService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,6 +32,9 @@ public class TokenService {
     private final JwtProperties properties;
     private final MemberInfoService infoService;
 
+    @Autowired
+    private Utils utils;
+
     private Key key;
 
     public TokenService(JwtProperties properties, MemberInfoService infoService) {
@@ -42,19 +45,16 @@ public class TokenService {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
-
-
     /**
      * JWT 토큰 생성
+     *
      * @param email
-     * @param password
      * @return
      */
-    private String create(String email) {
-        MemberInfo memberInfo = (MemberInfo) infoService.loadUserByUsername(email);
+    public String create(String email) {
+        MemberInfo memberInfo = (MemberInfo)infoService.loadUserByUsername(email);
 
-        String authorities = memberInfo.getAuthorities().stream().map(a -> a.getAuthority())
-                .collect(Collectors.joining("||"));
+        String authorities = memberInfo.getAuthorities().stream().map(a -> a.getAuthority()).collect(Collectors.joining("||"));
         int validTime = properties.getValidTime() * 1000;
         Date date = new Date((new Date()).getTime() + validTime); // 15분 뒤의 시간(만료 시간)
 
@@ -67,14 +67,17 @@ public class TokenService {
     }
 
     /**
-     * 토큰으로 인증 처리 (로그인 처리)
+     * 토큰으로 인증 처리(로그인 처리)
      *
      * 요청 헤더:
-     *        Authorization: Bearer 토큰
+     *      Authorization: Bearer 토큰
      * @param token
      * @return
      */
-    public Authentication authentication(String token) {
+    public Authentication authenticate(String token) {
+
+        // 토큰 유효성 검사
+        validate(token);
 
         Claims claims = Jwts.parser()
                 .setSigningKey(key)
@@ -84,8 +87,7 @@ public class TokenService {
 
         String email = claims.getSubject();
         String authorities = (String) claims.get("authorities");
-        List<SimpleGrantedAuthority> _authorities = Arrays.stream(authorities.split("||"))
-                .map(SimpleGrantedAuthority::new).toList();
+        List<SimpleGrantedAuthority> _authorities = Arrays.stream(authorities.split("||")).map(SimpleGrantedAuthority::new).toList();
 
         MemberInfo memberInfo = (MemberInfo) infoService.loadUserByUsername(email);
         memberInfo.setAuthorities(_authorities);
@@ -97,15 +99,48 @@ public class TokenService {
         return authentication;
     }
 
-    public Authentication authentication(HttpServletRequest request) {
+    public Authentication authenticate(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
 
         if (!StringUtils.hasText(authHeader)) {
-            throw new UnAuthorizedException();
+            return null; // 회원가입 또는 로그인 시
         }
 
         String token = authHeader.substring(7);
 
-        return authentication(token);
+        return authenticate(token);
+    }
+
+    /**
+     * 토큰 검증
+     *
+     * @param token
+     */
+    public void validate(String token) {
+        String errorCode = null;
+        Exception error = null;
+        try {
+            Jwts.parser().setSigningKey(key).build().parseClaimsJws(token).getPayload();
+        } catch (io.jsonwebtoken.security.SecurityException | MalformedJwtException e) {
+            errorCode = "JWT.malformed";
+            error = e;
+        } catch (ExpiredJwtException e) { // 토큰 만료
+            errorCode = "JWT.expired";
+            error = e;
+        } catch (UnsupportedJwtException e) {
+            errorCode = "JWT.unsupported";
+            error = e;
+        } catch (Exception e) {
+            errorCode = "JWT.error";
+            error = e;
+        }
+
+        if (StringUtils.hasText(errorCode)) {
+            throw new UnAuthorizedException(utils.getMessage(errorCode));
+        }
+
+        if (error != null) {
+            error.printStackTrace();
+        }
     }
 }

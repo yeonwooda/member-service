@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class Utils {
-    private  final HttpServletRequest request;
+    private final HttpServletRequest request;
     private final MessageSource messageSource;
 
     /**
@@ -73,7 +73,5 @@ public class Utils {
             }
 
             return messages;
-
     }
-
 }

@@ -41,5 +41,4 @@ public class Member extends BaseEntity implements Serializable {
 
     // 비밀번호 변경 일시
     private LocalDateTime credentialChangedAt;
-
 }

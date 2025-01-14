@@ -15,7 +15,6 @@ public class MessageSourceConfig {
         ms.addBasenames("messages.commons", "messages.validations", "messages.errors");
         ms.setDefaultEncoding("UTF-8");
 
-
         return ms;
     }
 }
